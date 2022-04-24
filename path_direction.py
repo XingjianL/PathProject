@@ -51,7 +51,7 @@ def set_mask(image_mask, initial_coord, slope, value):
         image_mask[0:line_y, x] = value # change value of under the line (top of the image)
     return image_mask
 
-path_dir = '/home/xing/TesterCodes/OpenCV/PathProject/testpath.png'
+path_dir = '/home/xing/TesterCodes/OpenCV/PathProject/testpath2.png'
 if __name__ == '__main__':
 
     frame = cv2.imread(path_dir)
@@ -78,18 +78,16 @@ if __name__ == '__main__':
     #print('slope', pca_vector_1[:,0])
 
     # Create the masks to separate two paths
-        # may need to use first components if the 2 path form a right angle 
+        # may need to use first components if the 2 path form a right angle  (PC1, pca_vector_1[:,1] vs PC2, [:,0])
         # else using the second is fine
     mask_one = np.ones(IMAGE_SIZE, dtype="uint8")                          # generate mask
     mask_one = set_mask(mask_one, center1[:,0], pca_vector_1[:,0], 0)       # set above 0
     mask_two = np.zeros(IMAGE_SIZE, dtype="uint8")                          # generate mask
     mask_two = set_mask(mask_two, center1[:,0], pca_vector_1[:,0], 1)       # set above 1
-
     # generate the two path segments
     bottom_path = cv2.bitwise_and(thres,thres,mask=mask_one)
     top_path = cv2.bitwise_and(thres,thres,mask=mask_two)
-    cv2.imshow('mask1',mask_one)
-    cv2.imshow('mask2',mask_two)
+    
     cv2.imshow('mask1_path',bottom_path)
     cv2.imshow('mask2_path',top_path)
 
@@ -111,6 +109,6 @@ if __name__ == '__main__':
     cv2.circle(frame,(bot_path_hori, bot_path_vert),radius=4,color=(255,255,0))
     cv2.circle(frame,(top_path_hori, top_path_vert),radius=4,color=(255,255,255))
     cv2.imshow('final', frame)
-    cv2.waitKey(0)
-    while True:
-        continue
+    cv2.waitKey()
+    
+    input()
