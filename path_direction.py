@@ -1,8 +1,43 @@
+
 import cv2
 import numpy as np
 from scipy import ndimage
 import os
 
+KMEANSFILTER = [2,  # num of clusters
+                4,  # num of iterations
+                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0), # criteria
+                cv2.KMEANS_PP_CENTERS]  # flag
+
+class ImagePrep:
+    def __init__(self, slice_size = 10, kmeans_filter = KMEANSFILTER):
+        self.slice_size = slice_size
+        self.k, self.iter_num, self.criteria, self.flag = KMEANSFILTER
+    def slice(self, image):
+        arr_size = tuple(int(element / self.slice_size) for element in image.shape)
+        col_array = np.array_split(image, arr_size[0], axis=0)
+        img_array = []
+        for col in col_array:
+            img_array.append(np.array_split(col,arr_size[1],axis=1))
+        return img_array
+    def combineRow(self,imgs):
+        combined_img = imgs[0]
+        for img in imgs[1:]:
+            combined_img = np.concatenate((combined_img,img),axis=1)
+        return combined_img
+    def combineCol(self,imgs):
+        combined_img = imgs[0]
+        for img in imgs[1:]:
+            combined_img = np.concatenate((combined_img,img),axis=0)
+        return combined_img
+    def reduce_image_color(self, image):
+        img_kmean = image.reshape(-1,3)
+        img_kmean = np.float32(img_kmean)
+        ret,label,center = cv2.kmeans(img_kmean,self.k,None,self.criteria,self.iter_num,self.flag)
+        center = np.uint8(center)
+        res = center[label.flatten()]
+        res2 = res.reshape((image.shape))
+        return res2
 PATH_THRESHOLD = 130     # threshold value for gray to binary
 FORWARD_DEFAULT = [0,-1] # image up is forward
 # input - image with partial path
@@ -63,12 +98,32 @@ def compute_angle(v_1, v_2):
     return np.arccos(np.dot(unit_v_1,unit_v_2))
 
 
-path_dir = '/home/lixin/Projects/GitHubProjects/PathProject/Data/Screenshot 2022-05-20 185437.png'
-if __name__ == '__main__':
 
-    frame = cv2.imread(path_dir)
+if __name__ == '__main__':
+    path_dir = '/home/xing/TesterCodes/OpenCV/PathProject/Data/Screenshot 2022-05-20 185437.png'
+    test_prep = ImagePrep(slice_size = 50)
     
-    #frame = cv2.resize(frame, IMAGE_SIZE)
+    ####
+    #   Filter Image to Binary Image
+    ####
+    frame = cv2.imread(path_dir)
+    test_slice_imgs = test_prep.slice(frame)
+    test_kmeans = test_slice_imgs.copy()
+    comb_row = [i for i in range(len(test_slice_imgs))]
+    for i,row in enumerate(test_slice_imgs):
+        for j,block in enumerate(row):
+            test_kmeans[i][j] = test_prep.reduce_image_color(block)
+        comb_row[i] = (test_prep.combineRow(test_kmeans[i]))
+        cv2.imshow('test_kmean',comb_row[i])
+        cv2.waitKey(-1)
+    filter_final = test_prep.combineCol(comb_row)
+
+    cv2.imshow('testslice',test_prep.reduce_image_color(filter_final))
+
+
+    ####
+    #   Find Path Directions
+    ####
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # simple threshold
     _, thres = cv2.threshold(gray, PATH_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
@@ -86,10 +141,7 @@ if __name__ == '__main__':
     cv2.circle(gray,(hori_cent, vert_cent),radius=3,color=(0))
     cv2.circle(gray,pca1_loc,radius=3,color=(255))
     cv2.circle(gray,pca2_loc,radius=3,color=(255))
-    cv2.imshow('center', gray)
-    #print('initial coord: ', center1)
-    #print('slope ', pca_vector_1)
-    #print('pca val ', pca_val)
+
     slice_dir = np.argmin(pca_val)  # slice by the minimum variance
     # Create the masks to separate two paths
     mask_one = np.ones(input_shape, dtype="uint8")                                   # generate mask
@@ -135,6 +187,7 @@ if __name__ == '__main__':
     rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
     cv2.imshow('after_bot', rotated_bot_up)
     cv2.imshow('after_top', rotated_top_up)
+    print(os.getcwd())
     cv2.imwrite(os.getcwd()+'/Results/labeled_result.png', frame)
     cv2.imwrite(os.getcwd()+'/Results/rotated_result_bot.png',rotated_bot_up)
     cv2.imwrite(os.getcwd()+'/Results/rotated_result_top.png',rotated_top_up)
