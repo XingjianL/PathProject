@@ -11,16 +11,11 @@ PATH_THRESHOLD = 130     # threshold value for gray to binary
 #   3. if one edge is not 0 (or some threshold), move towards that edge
 #   4. else process input as entire path
 
-# input - image with entire path    (mostly done, need to take care of the edge case of two paths forming right angle)
+# input - image with entire path    (should be done except realistic situation of step 1)
 # steps
 #   1. convert to binary image (kmeans/grayscale -> threshold -> erosion if needed)
 #   2. Extract two sections of path -> coordinate PCA, second component
 #   3. Extract direction of each section -> coordinate PCA, first component
-
-# solving above edge case (right angle paths)
-#   1. check two path direction after first check (if same -> use first component, else correct vectors)
-#   2. second check (if 90 degrees -> correct vectors, else, first check was correct vectors)
-
 
 ### 
 #   Functions
@@ -49,11 +44,12 @@ def set_mask(image_mask, initial_coord, slope, value):
         image_mask[0:line_y, x] = value # change value of under the line (top of the image)
     return image_mask
 
-
+# just for finding the place to draw the circle
 def compute_location(pca_cent, pca_dir, scale = 10):
     return (int(pca_cent[0] + scale * pca_dir[0]),
             int(pca_cent[1] + scale * pca_dir[1]))
 
+# compute angle between two vectors
 # arccos((unit_a dot unit_b))
 def compute_angle(v_1, v_2):
     unit_v_1 = v_1 / np.linalg.norm(v_1)
@@ -112,11 +108,11 @@ if __name__ == '__main__':
     bot_pca_1 = compute_location(path_center1.T[0],bot_dir, scale = 20)
     top_pca_1 = compute_location(path_center2.T[0],top_dir, scale = 20)
 
-    
+    # find angle between bottom direction and top direction
     angle = compute_angle(bot_dir, top_dir)
-    print(angle)
-
-    rotated = ndimage.rotate(frame,angle*180/np.pi)
+    print("+x is right, -y is up")
+    print("bot_dir[x,y], top_dir[x,y], angle(rad): ",bot_dir,top_dir,angle)
+    rotated = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
 
     cv2.circle(frame,(bot_hori_cent, bot_vert_cent),radius=3,color=(0,0,0))
     cv2.circle(frame,(top_hori_cent, top_vert_cent),radius=3,color=(0,0,0))
