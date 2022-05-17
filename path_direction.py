@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from scipy import ndimage
+import os
 IMAGE_SIZE = (300,300)    # (width(x), height(y))
 PATH_THRESHOLD = 130     # threshold value for gray to binary
 # input - image with partial path
@@ -123,6 +124,7 @@ if __name__ == '__main__':
     cv2.circle(frame,top_pca_1,radius=4,color=(255,255,255))
     cv2.imshow('final', frame)
     cv2.imshow('after', rotated)
+    cv2.imwrite(os.getcwd()+'/rotated_result.png',rotated)
     cv2.waitKey()
     
     input()
