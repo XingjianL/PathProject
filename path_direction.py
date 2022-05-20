@@ -102,18 +102,20 @@ if __name__ == '__main__':
     cv2.imshow('mask1_path',bottom_path)
     cv2.imshow('mask2_path',top_path)
 
-    # Compute Principle Components for both path segments
+    # Compute Principle Components for both path segments (center point(mean), direction vector(eigvec), variance vector(eigval))
     path_center1, path_direction1, pca_val1 = Path_PCA(bottom_path)
     path_center2, path_direction2, pca_val2 = Path_PCA(top_path)
     # select highest variance for each(eigenvalue)
     bot_dir = path_direction1[:,np.argmax(pca_val1)]
     top_dir = path_direction2[:,np.argmax(pca_val2)]
+    # center of two segments (start location)
     bot_hori_cent, bot_vert_cent = int(path_center1[:,0][0]), int(path_center1[:,0][1])
     top_hori_cent, top_vert_cent = int(path_center2[:,0][0]), int(path_center2[:,0][1])
+    # compute end location of two segment directions
     bot_pca_1 = compute_location(path_center1.T[0],bot_dir, scale = 20)
     top_pca_1 = compute_location(path_center2.T[0],top_dir, scale = 20)
 
-    # find angle between bottom direction and top direction
+    # find angle of bottom direction and top direction with respect to up
     bot_angle = compute_angle(FORWARD_DEFAULT, bot_dir)
     angle = compute_angle(FORWARD_DEFAULT, top_dir)
     print("+x is right, -y is up")
@@ -129,7 +131,7 @@ if __name__ == '__main__':
     cv2.imshow('final', frame)
 
     rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the top is vertical
-    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
+    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the bot is vertical
     cv2.imshow('after_bot', rotated_bot_up)
     cv2.imshow('after_top', rotated_top_up)
     cv2.imwrite(os.getcwd()+'/Results/labeled_result.png', frame)
