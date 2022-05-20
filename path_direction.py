@@ -60,7 +60,7 @@ def compute_angle(v_1, v_2):
     return np.arccos(np.dot(unit_v_1,unit_v_2))
 
 
-path_dir = '/home/lixin/Projects/GitHubProjects/PathProject/Screenshot 2022-05-20 185437.png'
+path_dir = '/home/lixin/Projects/GitHubProjects/PathProject/Data/Screenshot 2022-05-20 185437.png'
 if __name__ == '__main__':
 
     frame = cv2.imread(path_dir)
@@ -130,8 +130,9 @@ if __name__ == '__main__':
     cv2.imshow('final', frame)
     cv2.imshow('after_bot', rotated_bot_up)
     cv2.imshow('after_top', rotated_top_up)
-    cv2.imwrite(os.getcwd()+'/rotated_result_bot.png',rotated_bot_up)
-    cv2.imwrite(os.getcwd()+'/rotated_result_top.png',rotated_top_up)
+    cv2.imwrite(os.getcwd()+'/Results/labeled_result.png', frame)
+    cv2.imwrite(os.getcwd()+'/Results/rotated_result_bot.png',rotated_bot_up)
+    cv2.imwrite(os.getcwd()+'/Results/rotated_result_top.png',rotated_top_up)
     cv2.waitKey()
     
     input()
