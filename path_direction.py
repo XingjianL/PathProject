@@ -41,10 +41,13 @@ def set_mask(image_mask, initial_coord, slope, value):
     m = slope[1] / slope[0]
     b = initial_coord[1] - m * initial_coord[0]
     for x in range(image_mask.shape[1]):
+        # compute y
         line_y = int(round(m*x + b))
+        # bound y within image height
         if line_y > image_mask.shape[0]: line_y = image_mask.shape[0]
         if line_y < 0: line_y = 0
-        image_mask[0:line_y, x] = value # change value of under the line (top of the image)
+        # change value of under the line (top of the image)
+        image_mask[0:line_y, x] = value 
     return image_mask
 
 # just for finding the place to draw the circle
@@ -89,8 +92,6 @@ if __name__ == '__main__':
     #print('pca val ', pca_val)
     slice_dir = np.argmin(pca_val)  # slice by the minimum variance
     # Create the masks to separate two paths
-        # may need to use first components if the 2 path form a right angle  (PC1, pca_vector_1[:,1] vs PC2, [:,0])
-        # else using the second is fine
     mask_one = np.ones(input_shape, dtype="uint8")                                   # generate mask
     mask_one = set_mask(mask_one, center1[:,0], pca_vector_1[:,slice_dir], 0)       # set above 0
     mask_two = np.zeros(input_shape, dtype="uint8")                                  # generate mask
@@ -130,8 +131,8 @@ if __name__ == '__main__':
                     color=(255,255,255),thickness=2,tipLength=0.5)
     cv2.imshow('final', frame)
 
-    rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the top is vertical
-    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the bot is vertical
+    rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the bot is vertical
+    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
     cv2.imshow('after_bot', rotated_bot_up)
     cv2.imshow('after_top', rotated_top_up)
     cv2.imwrite(os.getcwd()+'/Results/labeled_result.png', frame)
