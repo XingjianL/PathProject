@@ -119,8 +119,7 @@ if __name__ == '__main__':
     print("+x is right, -y is up")
     print(f"bot_dir[x,y]: {bot_dir}, top_dir[x,y]: {top_dir}, bot_angle(rad): {bot_angle}, top_angle: {angle}")
     
-    rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the top is vertical
-    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
+    
     cv2.putText(frame,'bot',bot_pca_1,fontFace=cv2.FONT_HERSHEY_PLAIN,fontScale=1,color=(255,255,255))
     cv2.putText(frame,'top',top_pca_1,fontFace=cv2.FONT_HERSHEY_PLAIN,fontScale=1,color=(255,255,255))
     cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),bot_pca_1,
@@ -128,6 +127,9 @@ if __name__ == '__main__':
     cv2.arrowedLine(frame,(top_hori_cent, top_vert_cent),top_pca_1,
                     color=(255,255,255),thickness=2,tipLength=0.5)
     cv2.imshow('final', frame)
+
+    rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the top is vertical
+    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
     cv2.imshow('after_bot', rotated_bot_up)
     cv2.imshow('after_top', rotated_top_up)
     cv2.imwrite(os.getcwd()+'/Results/labeled_result.png', frame)
