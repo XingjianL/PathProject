@@ -2,8 +2,9 @@ import cv2
 import numpy as np
 from scipy import ndimage
 import os
-IMAGE_SIZE = (300,300)    # (width(x), height(y))
+
 PATH_THRESHOLD = 130     # threshold value for gray to binary
+FORWARD_DEFAULT = [0,-1] # image up is forward
 # input - image with partial path
 # steps
 #   1. convert to binary/grayscale image
@@ -25,7 +26,7 @@ PATH_THRESHOLD = 130     # threshold value for gray to binary
 #         pca_vector: [[PC2_x, PC1_x], [PC2_y, PC1_y]]
 def Path_PCA(image):                       # definition method
     pca_vector = []
-    image = cv2.resize(image,IMAGE_SIZE)
+    #image = cv2.resize(image,IMAGE_SIZE)
     coords_data = np.array(cv2.findNonZero(image)).T.reshape((2,-1))            # 2 x n matrix of coords [[x1,x2,...],[y1,y2,...]]
     mean = np.mean(coords_data,axis=1,keepdims=True)                         # center of coords
     cov_mat = np.cov(coords_data - mean, ddof = 1)              # find covariance
@@ -39,8 +40,10 @@ def set_mask(image_mask, initial_coord, slope, value):
     # b = line_y - mx
     m = slope[1] / slope[0]
     b = initial_coord[1] - m * initial_coord[0]
-    for x in range(IMAGE_SIZE[0]):
+    for x in range(image_mask.shape[1]):
         line_y = int(round(m*x + b))
+        if line_y > image_mask.shape[0]: line_y = image_mask.shape[0]
+        if line_y < 0: line_y = 0
         image_mask[0:line_y, x] = value # change value of under the line (top of the image)
     return image_mask
 
@@ -57,16 +60,18 @@ def compute_angle(v_1, v_2):
     return np.arccos(np.dot(unit_v_1,unit_v_2))
 
 
-path_dir = '/home/lixin/Projects/GitHubProjects/PathProject/testpath.png'
+path_dir = '/home/lixin/Projects/GitHubProjects/PathProject/Screenshot 2022-05-20 185437.png'
 if __name__ == '__main__':
 
     frame = cv2.imread(path_dir)
-    frame = cv2.resize(frame, IMAGE_SIZE)
+    
+    #frame = cv2.resize(frame, IMAGE_SIZE)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # simple threshold
-    _, thres = cv2.threshold(gray, PATH_THRESHOLD, 255, cv2.THRESH_BINARY)
-    #cv2.imshow('thres',thres)
-
+    _, thres = cv2.threshold(gray, PATH_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
+    cv2.imshow('thres',thres)
+    input_shape = thres.shape
+    print(input_shape)
     # compute Principle Components
     # to find line between two paths
     center1, pca_vector_1, pca_val = Path_PCA(thres)
@@ -86,9 +91,9 @@ if __name__ == '__main__':
     # Create the masks to separate two paths
         # may need to use first components if the 2 path form a right angle  (PC1, pca_vector_1[:,1] vs PC2, [:,0])
         # else using the second is fine
-    mask_one = np.ones(IMAGE_SIZE, dtype="uint8")                                   # generate mask
+    mask_one = np.ones(input_shape, dtype="uint8")                                   # generate mask
     mask_one = set_mask(mask_one, center1[:,0], pca_vector_1[:,slice_dir], 0)       # set above 0
-    mask_two = np.zeros(IMAGE_SIZE, dtype="uint8")                                  # generate mask
+    mask_two = np.zeros(input_shape, dtype="uint8")                                  # generate mask
     mask_two = set_mask(mask_two, center1[:,0], pca_vector_1[:,slice_dir], 1)       # set above 1
     # generate the two path segments
     bottom_path = cv2.bitwise_and(thres,thres,mask=mask_one)
@@ -109,18 +114,24 @@ if __name__ == '__main__':
     top_pca_1 = compute_location(path_center2.T[0],top_dir, scale = 20)
 
     # find angle between bottom direction and top direction
-    angle = compute_angle(bot_dir, top_dir)
+    bot_angle = compute_angle(FORWARD_DEFAULT, bot_dir)
+    angle = compute_angle(FORWARD_DEFAULT, top_dir)
     print("+x is right, -y is up")
-    print("bot_dir[x,y], top_dir[x,y], angle(rad): ",bot_dir,top_dir,angle)
-    rotated = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
-
-    cv2.circle(frame,(bot_hori_cent, bot_vert_cent),radius=3,color=(0,0,0))
-    cv2.circle(frame,(top_hori_cent, top_vert_cent),radius=3,color=(0,0,0))
-    cv2.circle(frame,bot_pca_1,radius=4,color=(255,255,0))
-    cv2.circle(frame,top_pca_1,radius=4,color=(255,255,255))
+    print(f"bot_dir[x,y]: {bot_dir}, top_dir[x,y]: {top_dir}, bot_angle(rad): {bot_angle}, top_angle: {angle}")
+    
+    rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the top is vertical
+    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
+    cv2.putText(frame,'bot',bot_pca_1,fontFace=cv2.FONT_HERSHEY_PLAIN,fontScale=1,color=(255,255,255))
+    cv2.putText(frame,'top',top_pca_1,fontFace=cv2.FONT_HERSHEY_PLAIN,fontScale=1,color=(255,255,255))
+    cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),bot_pca_1,
+                    color=(0,0,0),thickness=2,tipLength=0.5)
+    cv2.arrowedLine(frame,(top_hori_cent, top_vert_cent),top_pca_1,
+                    color=(255,255,255),thickness=2,tipLength=0.5)
     cv2.imshow('final', frame)
-    cv2.imshow('after', rotated)
-    cv2.imwrite(os.getcwd()+'/rotated_result.png',rotated)
+    cv2.imshow('after_bot', rotated_bot_up)
+    cv2.imshow('after_top', rotated_top_up)
+    cv2.imwrite(os.getcwd()+'/rotated_result_bot.png',rotated_bot_up)
+    cv2.imwrite(os.getcwd()+'/rotated_result_top.png',rotated_top_up)
     cv2.waitKey()
     
     input()
