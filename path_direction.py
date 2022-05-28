@@ -4,15 +4,15 @@ import numpy as np
 from scipy import ndimage
 import os
 
-KMEANSFILTER = [2,  # num of clusters
+class ImagePrep:
+    KMEANSFILTER = [3,  # num of clusters
                 4,  # num of iterations
                 (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0), # criteria
                 cv2.KMEANS_PP_CENTERS]  # flag
 
-class ImagePrep:
     def __init__(self, slice_size = 10, kmeans_filter = KMEANSFILTER):
         self.slice_size = slice_size
-        self.k, self.iter_num, self.criteria, self.flag = KMEANSFILTER
+        self.k, self.iter_num, self.criteria, self.flag = kmeans_filter
     def slice(self, image):
         arr_size = tuple(int(element / self.slice_size) for element in image.shape)
         col_array = np.array_split(image, arr_size[0], axis=0)
@@ -37,7 +37,10 @@ class ImagePrep:
         center = np.uint8(center)
         res = center[label.flatten()]
         res2 = res.reshape((image.shape))
-        return res2
+        return res2, center
+
+SCALING_FACTOR = 0.5
+
 PATH_THRESHOLD = 130     # threshold value for gray to binary
 FORWARD_DEFAULT = [0,-1] # image up is forward
 # input - image with partial path
@@ -80,7 +83,7 @@ def set_mask(image_mask, initial_coord, slope, value):
         line_y = int(round(m*x + b))
         # bound y within image height
         if line_y > image_mask.shape[0]: line_y = image_mask.shape[0]
-        if line_y < 0: line_y = 0
+        if line_y <= 0: line_y = 1
         # change value of under the line (top of the image)
         image_mask[0:line_y, x] = value 
     return image_mask
@@ -100,34 +103,49 @@ def compute_angle(v_1, v_2):
 
 
 if __name__ == '__main__':
-    path_dir = '/home/xing/TesterCodes/OpenCV/PathProject/Data/Screenshot 2022-05-20 185437.png'
+    path_dir = '/home/lixin/Projects/GitHubProjects/PathProject/Data/Screen Shot 2022-05-28 at 3.50.20 PM.png'
+
     test_prep = ImagePrep(slice_size = 50)
     
     ####
     #   Filter Image to Binary Image
     ####
     frame = cv2.imread(path_dir)
+
+    width = int(frame.shape[1] * SCALING_FACTOR)
+    height = int(frame.shape[0] * SCALING_FACTOR)
+    frame = cv2.resize(frame, (width, height))
+
     test_slice_imgs = test_prep.slice(frame)
     test_kmeans = test_slice_imgs.copy()
     comb_row = [i for i in range(len(test_slice_imgs))]
     for i,row in enumerate(test_slice_imgs):
         for j,block in enumerate(row):
-            test_kmeans[i][j] = test_prep.reduce_image_color(block)
+            test_kmeans[i][j], _ = test_prep.reduce_image_color(block)
         comb_row[i] = (test_prep.combineRow(test_kmeans[i]))
-        cv2.imshow('test_kmean',comb_row[i])
-        cv2.waitKey(-1)
-    filter_final = test_prep.combineCol(comb_row)
-
-    cv2.imshow('testslice',test_prep.reduce_image_color(filter_final))
-
+    combined_filter = test_prep.combineCol(comb_row)
+    filter_final, colors = test_prep.reduce_image_color(combined_filter)
+    cv2.imshow('testslice',filter_final)
 
     ####
     #   Find Path Directions
     ####
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # simple threshold
-    _, thres = cv2.threshold(gray, PATH_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
+    
+    #gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(filter_final, cv2.COLOR_BGR2GRAY) 
+    cv2.imshow('g',gray)    
+    gray_colors, gray_counts = np.unique(gray.flatten(),return_counts=True)                 # find the colors and counts of each color
+    path_color = gray_colors[np.argsort(gray_counts)[0]]                                    # find the least common color
+    print(gray_colors,gray_counts,path_color)
+    # simple threshold, use the least frequent color (which should not be the background)
+    thres = np.uint8(np.where(gray == path_color, 255, 0))
+    #_, thres = cv2.threshold(gray, PATH_THRESHOLD_HIGH, 255, cv2.THRESH_BINARY)
+
+    kernel = np.ones((5,5),np.uint8)
+    thres = cv2.morphologyEx(thres, cv2.MORPH_CLOSE, kernel)
+
     cv2.imshow('thres',thres)
+
     input_shape = thres.shape
     print(input_shape)
     # compute Principle Components
@@ -151,7 +169,7 @@ if __name__ == '__main__':
     # generate the two path segments
     bottom_path = cv2.bitwise_and(thres,thres,mask=mask_one)
     top_path = cv2.bitwise_and(thres,thres,mask=mask_two)
-    
+
     cv2.imshow('mask1_path',bottom_path)
     cv2.imshow('mask2_path',top_path)
 
