@@ -4,6 +4,21 @@ import numpy as np
 from scipy import ndimage
 import os
 
+from time import time
+total_time_func = 0
+def time_func(func):
+    def wrapper(*args, **kwargs):
+        start_time = time()
+        result = func(*args, **kwargs)
+        end_time = time()
+        global total_time_func 
+        total_time_func += end_time-start_time
+        if (kwargs.get('print_time') is False):
+            return result
+        print(f"Time taken for {func.__name__}: {end_time-start_time}")
+        return result
+    return wrapper
+
 class ImagePrep:
     KMEANSFILTER = [3,  # num of clusters
                 4,  # num of iterations
@@ -13,6 +28,8 @@ class ImagePrep:
     def __init__(self, slice_size = 10, kmeans_filter = KMEANSFILTER):
         self.slice_size = slice_size
         self.k, self.iter_num, self.criteria, self.flag = kmeans_filter
+
+    @time_func
     def slice(self, image):
         arr_size = tuple(int(element / self.slice_size) for element in image.shape)
         col_array = np.array_split(image, arr_size[0], axis=0)
@@ -20,29 +37,46 @@ class ImagePrep:
         for col in col_array:
             img_array.append(np.array_split(col,arr_size[1],axis=1))
         return img_array
-    def combineRow(self,imgs):
+
+    @time_func
+    def combineRow(self, imgs):
         combined_img = imgs[0]
         for img in imgs[1:]:
             combined_img = np.concatenate((combined_img,img),axis=1)
         return combined_img
-    def combineCol(self,imgs):
+
+    @time_func
+    def combineCol(self, imgs):
         combined_img = imgs[0]
         for img in imgs[1:]:
             combined_img = np.concatenate((combined_img,img),axis=0)
         return combined_img
-    def reduce_image_color(self, image):
+
+    @time_func
+    def reduce_image_color(self, image, ncluster = None, print_time = None):
         img_kmean = image.reshape(-1,3)
         img_kmean = np.float32(img_kmean)
-        ret,label,center = cv2.kmeans(img_kmean,self.k,None,self.criteria,self.iter_num,self.flag)
+        if ncluster is not None:
+            ret,label,center = cv2.kmeans(img_kmean,ncluster,None,self.criteria,self.iter_num,self.flag)
+        else:
+            ret,label,center = cv2.kmeans(img_kmean,self.k,None,self.criteria,self.iter_num,self.flag)
         center = np.uint8(center)
         res = center[label.flatten()]
         res2 = res.reshape((image.shape))
         return res2, center
 
-SCALING_FACTOR = 0.5
+class Path_Properties:
+    def __init__(self):
+        self.path_color = None
+        self.background_color = None
 
+
+SCALING_FACTOR = 0.2
+
+PATH_SIZE_IN_IMAGE = 0.05 # threshold % of the image as path (less means it is noise)
 PATH_THRESHOLD = 130     # threshold value for gray to binary
 FORWARD_DEFAULT = [0,-1] # image up is forward
+
 # input - image with partial path
 # steps
 #   1. convert to binary/grayscale image
@@ -62,6 +96,7 @@ FORWARD_DEFAULT = [0,-1] # image up is forward
 # input: binary image
 # output: mean: center of the coordinates, 
 #         pca_vector: [[PC2_x, PC1_x], [PC2_y, PC1_y]]
+@time_func
 def Path_PCA(image):                       # definition method
     pca_vector = []
     #image = cv2.resize(image,IMAGE_SIZE)
@@ -73,6 +108,7 @@ def Path_PCA(image):                       # definition method
 
 # changes the value above the line in an image
 # input: image_mask, initial_coord[x,y], slope[x,y], value= 0,1 (for binary masking)
+@time_func
 def set_mask(image_mask, initial_coord, slope, value):
     # line_y = mx+b
     # b = line_y - mx
@@ -95,6 +131,7 @@ def compute_location(pca_cent, pca_dir, scale = 10):
 
 # compute angle between two vectors
 # arccos((unit_a dot unit_b))
+@time_func
 def compute_angle(v_1, v_2):
     unit_v_1 = v_1 / np.linalg.norm(v_1)
     unit_v_2 = v_2 / np.linalg.norm(v_2)
@@ -103,14 +140,18 @@ def compute_angle(v_1, v_2):
 
 
 if __name__ == '__main__':
-    path_dir = '/home/lixin/Projects/GitHubProjects/PathProject/Data/Screen Shot 2022-05-28 at 3.50.20 PM.png'
+    path_dirs = ['/home/xing/TesterCodes/OpenCV/PathProject/Data/Screen Shot 2022-05-28 at 3.48.07 PM.png',
+                '/home/xing/TesterCodes/OpenCV/PathProject/Data/Screen Shot 2022-05-28 at 3.49.47 PM.png',
+                '/home/xing/TesterCodes/OpenCV/PathProject/Data/Screen Shot 2022-05-28 at 3.50.20 PM.png']
+
+    path_file_select = 0
 
     test_prep = ImagePrep(slice_size = 50)
     
     ####
     #   Filter Image to Binary Image
     ####
-    frame = cv2.imread(path_dir)
+    frame = cv2.imread(path_dirs[path_file_select])
 
     width = int(frame.shape[1] * SCALING_FACTOR)
     height = int(frame.shape[0] * SCALING_FACTOR)
@@ -121,28 +162,34 @@ if __name__ == '__main__':
     comb_row = [i for i in range(len(test_slice_imgs))]
     for i,row in enumerate(test_slice_imgs):
         for j,block in enumerate(row):
-            test_kmeans[i][j], _ = test_prep.reduce_image_color(block)
+            test_kmeans[i][j], _ = test_prep.reduce_image_color(block, print_time=False)
         comb_row[i] = (test_prep.combineRow(test_kmeans[i]))
     combined_filter = test_prep.combineCol(comb_row)
-    filter_final, colors = test_prep.reduce_image_color(combined_filter)
+
+    combined_filter[:,:,1:3] = 0    # only blue channel is relevant (clear GR in BGR)
+
+    filter_final, colors = test_prep.reduce_image_color(combined_filter,2)
+
+    
+
     cv2.imshow('testslice',filter_final)
 
     ####
     #   Find Path Directions
     ####
-    
-    #gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     gray = cv2.cvtColor(filter_final, cv2.COLOR_BGR2GRAY) 
-    cv2.imshow('g',gray)    
+    cv2.imshow('g',gray)
+
+    # adaptively find the path color
     gray_colors, gray_counts = np.unique(gray.flatten(),return_counts=True)                 # find the colors and counts of each color
+    gray_counts[gray_counts < sum(gray_counts) * PATH_SIZE_IN_IMAGE] = sum(gray_counts)                     # remove noise
     path_color = gray_colors[np.argsort(gray_counts)[0]]                                    # find the least common color
     print(gray_colors,gray_counts,path_color)
     # simple threshold, use the least frequent color (which should not be the background)
-    thres = np.uint8(np.where(gray == path_color, 255, 0))
-    #_, thres = cv2.threshold(gray, PATH_THRESHOLD_HIGH, 255, cv2.THRESH_BINARY)
+    thres = np.uint8(np.where(gray == path_color, 255, 0)) # produce binary image for the path color found
 
-    kernel = np.ones((5,5),np.uint8)
-    thres = cv2.morphologyEx(thres, cv2.MORPH_CLOSE, kernel)
+    #kernel = np.ones((5,5),np.uint8)
+    #thres = cv2.morphologyEx(thres, cv2.MORPH_CLOSE, kernel)
 
     cv2.imshow('thres',thres)
 
@@ -198,17 +245,19 @@ if __name__ == '__main__':
     cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),bot_pca_1,
                     color=(0,0,0),thickness=2,tipLength=0.5)
     cv2.arrowedLine(frame,(top_hori_cent, top_vert_cent),top_pca_1,
-                    color=(255,255,255),thickness=2,tipLength=0.5)
+                    color=(0,0,0),thickness=2,tipLength=0.5)
+    cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),(top_hori_cent, top_vert_cent),
+                    color=(255,255,255),thickness=2,tipLength=0.2)
     cv2.imshow('final', frame)
 
     rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the bot is vertical
     rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
-    cv2.imshow('after_bot', rotated_bot_up)
-    cv2.imshow('after_top', rotated_top_up)
+    #cv2.imshow('after_bot', rotated_bot_up)
+    #cv2.imshow('after_top', rotated_top_up)
     print(os.getcwd())
     cv2.imwrite(os.getcwd()+'/Results/labeled_result.png', frame)
     cv2.imwrite(os.getcwd()+'/Results/rotated_result_bot.png',rotated_bot_up)
     cv2.imwrite(os.getcwd()+'/Results/rotated_result_top.png',rotated_top_up)
     cv2.waitKey()
-    
+    print(f"Total time: {total_time_func}")
     input()
