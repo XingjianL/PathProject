@@ -1,4 +1,5 @@
 
+from importlib.resources import path
 import cv2
 import numpy as np
 from scipy import ndimage
@@ -136,7 +137,9 @@ def compute_angle(v_1, v_2):
     unit_v_1 = v_1 / np.linalg.norm(v_1)
     unit_v_2 = v_2 / np.linalg.norm(v_2)
     return np.arccos(np.dot(unit_v_1,unit_v_2))
-
+@time_func
+def compute_slope(p_1, p_2):
+    return (p_2[0] - p_1[0]), (p_2[1] - p_1[1])
 
 
 if __name__ == '__main__':
@@ -232,13 +235,13 @@ if __name__ == '__main__':
     # compute end location of two segment directions
     bot_pca_1 = compute_location(path_center1.T[0],bot_dir, scale = 20)
     top_pca_1 = compute_location(path_center2.T[0],top_dir, scale = 20)
-
+    path_direction = compute_slope((bot_hori_cent, bot_vert_cent),(top_hori_cent, top_vert_cent))
     # find angle of bottom direction and top direction with respect to up
     bot_angle = compute_angle(FORWARD_DEFAULT, bot_dir)
-    angle = compute_angle(FORWARD_DEFAULT, top_dir)
+    top_angle = compute_angle(FORWARD_DEFAULT, top_dir)
+    path_angle = compute_angle(FORWARD_DEFAULT,path_direction)
     print("+x is right, -y is up")
-    print(f"bot_dir[x,y]: {bot_dir}, top_dir[x,y]: {top_dir}, bot_angle(rad): {bot_angle}, top_angle: {angle}")
-    
+    print(f"bot_dir[x,y]: {bot_dir}, top_dir[x,y]: {top_dir}, bot_angle(rad): {bot_angle}, top_angle: {top_angle}, path_angle: {path_angle}")
     
     cv2.putText(frame,'bot',bot_pca_1,fontFace=cv2.FONT_HERSHEY_PLAIN,fontScale=1,color=(255,255,255))
     cv2.putText(frame,'top',top_pca_1,fontFace=cv2.FONT_HERSHEY_PLAIN,fontScale=1,color=(255,255,255))
@@ -249,15 +252,16 @@ if __name__ == '__main__':
     cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),(top_hori_cent, top_vert_cent),
                     color=(255,255,255),thickness=2,tipLength=0.2)
     cv2.imshow('final', frame)
-
     rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the bot is vertical
-    rotated_top_up = ndimage.rotate(frame,angle*180/np.pi) # rotate the image so the top is vertical
+    rotated_top_up = ndimage.rotate(frame,top_angle*180/np.pi) # rotate the image so the top is vertical
+    rotated_path = ndimage.rotate(frame,float(path_angle)*180/np.pi)   
     #cv2.imshow('after_bot', rotated_bot_up)
     #cv2.imshow('after_top', rotated_top_up)
-    print(os.getcwd())
     cv2.imwrite(os.getcwd()+'/Results/labeled_result.png', frame)
     cv2.imwrite(os.getcwd()+'/Results/rotated_result_bot.png',rotated_bot_up)
     cv2.imwrite(os.getcwd()+'/Results/rotated_result_top.png',rotated_top_up)
+    cv2.imwrite(os.getcwd()+'/Results/rotated_result.png',rotated_path)
     cv2.waitKey()
+    print(f"result img path: {os.getcwd()}")
     print(f"Total time: {total_time_func}")
     input()
