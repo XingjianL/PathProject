@@ -1,5 +1,4 @@
 
-from importlib.resources import path
 import cv2
 import numpy as np
 from scipy import ndimage
@@ -67,29 +66,42 @@ class ImagePrep:
         return res2, center
 
 class Path_Properties:
-    def __init__(self):
+    PATH_PROPERTY_THRESHOLDS = np.array([10, 20, np.pi/6, 0.02, np.pi/6]) # difference in [path_color, background_color, path_theta, size, location_theta]
+
+    def __init__(self, path_properties = None):
+        self.confidence = 0.5
+
+        if path_properties is not None:
+            self.properties = path_properties
+            return
+            
         self.path_color = None
         self.background_color = None
+        self.path_theta = None
+        self.size = None
+        self.location_theta = None
+        self.properties = np.array([self.path_color, self.background_color, self.path_theta, self.size, self.location_theta])
 
+    # pass in a numpy array of [path_color, background_color, theta, size, location[x,y]]
+    def compareAndUpdate(self, path_properties):
+        # within threshold
+        if self.withinThreshold(path_properties, self.properties, self.PATH_PROPERTY_THRESHOLDS):
+            self.properties = path_properties
+            if self.confidence < 1: self.confidence += 0.01
+            return True
+        # outside of threshold
+        if self.confidence > 0: self.confidence -= 0.01
+        return False
+
+    def withinThreshold(self, val1, val2, thres):
+        print(abs(val1 - val2))
+        return (abs(val1 - val2) < thres).all() # return True only when all properties are under the threshold
 
 SCALING_FACTOR = 0.2
 
-PATH_SIZE_IN_IMAGE = 0.05 # threshold % of the image as path (less means it is noise)
+NOISE_PROPORTION = 0.05 # threshold % of the image as path (less means it is noise)
 PATH_THRESHOLD = 130     # threshold value for gray to binary
 FORWARD_DEFAULT = [0,-1] # image up is forward
-
-# input - image with partial path
-# steps
-#   1. convert to binary/grayscale image
-#   2. sum the edge pixel values
-#   3. if one edge is not 0 (or some threshold), move towards that edge
-#   4. else process input as entire path
-
-# input - image with entire path    (should be done except realistic situation of step 1)
-# steps
-#   1. convert to binary image (kmeans/grayscale -> threshold -> erosion if needed)
-#   2. Extract two sections of path -> coordinate PCA, second component
-#   3. Extract direction of each section -> coordinate PCA, first component
 
 ### 
 #   Functions
@@ -171,7 +183,7 @@ if __name__ == '__main__':
 
     combined_filter[:,:,1:3] = 0    # only blue channel is relevant (clear GR in BGR)
 
-    filter_final, colors = test_prep.reduce_image_color(combined_filter,2)
+    filter_final, colors = test_prep.reduce_image_color(combined_filter,2)  # reduce to 2 colors (background and path)
 
     
 
@@ -185,7 +197,7 @@ if __name__ == '__main__':
 
     # adaptively find the path color
     gray_colors, gray_counts = np.unique(gray.flatten(),return_counts=True)                 # find the colors and counts of each color
-    gray_counts[gray_counts < sum(gray_counts) * PATH_SIZE_IN_IMAGE] = sum(gray_counts)                     # remove noise
+    gray_counts[gray_counts < sum(gray_counts) * NOISE_PROPORTION] = sum(gray_counts)       # mark noise color (takse too little of the image)
     path_color = gray_colors[np.argsort(gray_counts)[0]]                                    # find the least common color
     print(gray_colors,gray_counts,path_color)
     # simple threshold, use the least frequent color (which should not be the background)
