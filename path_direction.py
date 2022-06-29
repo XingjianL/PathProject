@@ -66,8 +66,8 @@ class ImagePrep:
         return res2, center
 
 class Path_Properties:
-    PATH_PROPERTY_THRESHOLDS = np.array([10, 20, np.pi/6, 0.02, np.pi/6]) # difference in [path_color, background_color, path_theta, size, location_theta]
-
+    PATH_PROPERTY_THRESHOLDS = np.array([10, 20, np.pi/6, 0.02, 10, 10]) # difference in [path_color, background_color, path_theta, size, location_x, location_y]
+    PROPERTY_TAGS = ["path_color", "background_color", "bot2top_theta", "path_size", "x", "y"]
     def __init__(self, path_properties = None):
         self.confidence = 0.5
 
@@ -79,18 +79,24 @@ class Path_Properties:
         self.background_color = None
         self.path_theta = None
         self.size = None
-        self.location_theta = None
-        self.properties = np.array([self.path_color, self.background_color, self.path_theta, self.size, self.location_theta])
+        self.x = None
+        self.y = None
+        self.properties = np.array([self.path_color, self.background_color, self.path_theta, self.size, self.x, self.y])
 
-    # pass in a numpy array of [path_color, background_color, theta, size, location[x,y]]
+    # pass in a numpy array of properties
     def compareAndUpdate(self, path_properties):
         # within threshold
+        if (self.properties == None).any():
+            self.properties = path_properties
+            return True
         if self.withinThreshold(path_properties, self.properties, self.PATH_PROPERTY_THRESHOLDS):
             self.properties = path_properties
-            if self.confidence < 1: self.confidence += 0.01
+            if self.confidence < 1: 
+                self.confidence += 0.01
             return True
         # outside of threshold
-        if self.confidence > 0: self.confidence -= 0.01
+        if self.confidence > 0: 
+            self.confidence -= 0.01
         return False
 
     def withinThreshold(self, val1, val2, thres):
@@ -162,7 +168,7 @@ if __name__ == '__main__':
     path_file_select = 0
 
     test_prep = ImagePrep(slice_size = 50)
-    
+    path_object = Path_Properties()
     ####
     #   Filter Image to Binary Image
     ####
@@ -197,8 +203,11 @@ if __name__ == '__main__':
 
     # adaptively find the path color
     gray_colors, gray_counts = np.unique(gray.flatten(),return_counts=True)                 # find the colors and counts of each color
-    gray_counts[gray_counts < sum(gray_counts) * NOISE_PROPORTION] = sum(gray_counts)       # mark noise color (takse too little of the image)
+    img_size = sum(gray_counts)
+    gray_counts[gray_counts < img_size * NOISE_PROPORTION] = img_size       # mark noise color (takse too little of the image)
     path_color = gray_colors[np.argsort(gray_counts)[0]]                                    # find the least common color
+    path_size = gray_counts[np.argsort(gray_counts)[0]]
+    background_color = gray_colors[np.argsort(gray_counts)[1]]
     print(gray_colors,gray_counts,path_color)
     # simple threshold, use the least frequent color (which should not be the background)
     thres = np.uint8(np.where(gray == path_color, 255, 0)) # produce binary image for the path color found
@@ -276,4 +285,22 @@ if __name__ == '__main__':
     cv2.waitKey()
     print(f"result img path: {os.getcwd()}")
     print(f"Total time: {total_time_func}")
+
+
+    #    [path_color, background_color, theta, size, location[x,y]]
+    current_path_properties = [path_color, background_color, path_angle, path_size/img_size, bot_hori_cent, bot_vert_cent]
+    print(current_path_properties)
+    path_object.compareAndUpdate(current_path_properties)
+    print(list(zip(path_object.PROPERTY_TAGS, path_object.properties)))
+
+    if (path_object.properties[path_object.PROPERTY_TAGS.index("x")] < width/2):
+        print("move left")
+    else:
+        print("move right")
+
+    if (path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")] < np.pi/2):
+        print("rotate right")
+    else:
+        print("rotate left")
+
     input()
