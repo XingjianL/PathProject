@@ -65,9 +65,9 @@ class ImagePrep:
         return res2, center
 
 class Path_Properties:
-    #PATH_PROPERTY_THRESHOLDS = np.array([10, 20, np.pi/6, 0.02, 10, 10]) # difference in [path_color, background_color, path_theta, size, location_x, location_y]
-    PATH_PROPERTY_THRESHOLDS = np.array([100, 200, 100, 2, 1000, 1000]) # no threshold
-    PROPERTY_TAGS = ["path_color", "background_color", "bot2top_theta", "path_size", "x", "y"]
+    #PATH_PROPERTY_THRESHOLDS = np.array([10, 20, np.pi/6, 0.02, 10, 10, 10, 10]) # difference in [path_color, background_color, path_theta, size, location_x_bot, location_y_bot, location_x,top, location_y_top]
+    PATH_PROPERTY_THRESHOLDS = np.array([100, 200, 100, 2, 1000, 1000, 1000, 1000]) # no threshold
+    PROPERTY_TAGS = ["path_color", "background_color", "bot2top_theta", "path_size", "x_bot", "y_bot", "x_top", "y_top"]
     def __init__(self, path_properties = None):
         self.confidence = 0.5
 
@@ -75,13 +75,11 @@ class Path_Properties:
             self.properties = path_properties
             return
             
-        self.path_color = None
-        self.background_color = None
-        self.path_theta = None
-        self.size = None
-        self.x = None
-        self.y = None
-        self.properties = np.array([self.path_color, self.background_color, self.path_theta, self.size, self.x, self.y])
+        self.path_color, self.background_color = None, None
+        self.path_theta, self.size = None, None
+        self.x_bot, self.y_bot, self.x_top, self.y_top = None, None, None, None
+
+        self.properties = np.array([self.path_color, self.background_color, self.path_theta, self.size, self.x_bot, self.y_bot, self.x_top, self.y_top])
 
     # pass in a numpy array of properties
     def compareAndUpdate(self, path_properties):
@@ -100,7 +98,7 @@ class Path_Properties:
         return False
 
     def withinThreshold(self, val1, val2, thres):
-        print(abs(np.subtract(val1, val2)))
+        #print(abs(np.subtract(val1, val2)))
         return (abs(np.subtract(val1, val2)) < thres).all() # return True only when all properties are under the threshold
 
 SCALING_FACTOR = 0.5
@@ -163,9 +161,10 @@ if __name__ == '__main__':
     path_dirs = ['/home/lixin/Projects/GitHubProjects/PathProject/Data/path_left_up_down.mp4',
                 '/home/lixin/Projects/GitHubProjects/PathProject/Data/path_mid_left_right.mp4',
                 '/home/lixin/Projects/GitHubProjects/PathProject/Data/path_mid_up_down.mp4',
-                '/home/lixin/Projects/GitHubProjects/PathProject/Data/path_top_left_right.mp4']
+                '/home/lixin/Projects/GitHubProjects/PathProject/Data/path_top_left_right.mp4',
+                '/home/lixin/Projects/GitHubProjects/PathProject/Data/path_rotate.mp4']
 
-    path_file_select = 1
+    path_file_select = 4
 
     test_prep = ImagePrep(slice_size = 50)
     path_object = Path_Properties()
@@ -203,10 +202,10 @@ if __name__ == '__main__':
         #   Find Path Directions
         ####
         gray = cv2.cvtColor(filter_final, cv2.COLOR_BGR2GRAY) 
-        cv2.imshow('g',gray)
+        #cv2.imshow('g',gray)
         # adaptively find the path color
         gray_colors, gray_counts = np.unique(gray.flatten(),return_counts=True)                 # find the colors and counts of each color
-        print(gray_colors,gray_counts)
+        #print(gray_colors,gray_counts)
         
         if len(gray_colors) < 2:
             print("no path in image")
@@ -220,14 +219,14 @@ if __name__ == '__main__':
         path_color = gray_colors[np.argsort(gray_counts)[0]]                                    # find the least common color
         path_size = gray_counts[np.argsort(gray_counts)[0]]
         background_color = gray_colors[np.argsort(gray_counts)[1]]
-        print(gray_colors, gray_counts, path_color, background_color)
+        #print(gray_colors, gray_counts, path_color, background_color)
         # simple threshold, use the least frequent color (which should not be the background)
         thres = np.uint8(np.where(gray == path_color, 255, 0)) # produce binary image for the path color found
 
         #kernel = np.ones((5,5),np.uint8)
         #thres = cv2.morphologyEx(thres, cv2.MORPH_CLOSE, kernel)
 
-        cv2.imshow('thres',thres)
+        #cv2.imshow('thres',thres)
 
         input_shape = thres.shape
         # compute Principle Components
@@ -235,12 +234,12 @@ if __name__ == '__main__':
         center1, pca_vector_1, pca_val = Path_PCA(thres)
 
         # display the overall PC
-        hori_cent, vert_cent = int(center1[0][0]), int(center1[1][0])
-        pca1_loc = compute_location(center1[:,0],pca_vector_1[:,1])
-        pca2_loc = compute_location(center1[:,0],pca_vector_1[:,0])
-        cv2.circle(gray,(hori_cent, vert_cent),radius=3,color=(0))
-        cv2.circle(gray,pca1_loc,radius=3,color=(255))
-        cv2.circle(gray,pca2_loc,radius=3,color=(255))
+        #hori_cent, vert_cent = int(center1[0][0]), int(center1[1][0])
+        #pca1_loc = compute_location(center1[:,0],pca_vector_1[:,1])
+        #pca2_loc = compute_location(center1[:,0],pca_vector_1[:,0])
+        #cv2.circle(gray,(hori_cent, vert_cent),radius=3,color=(0))
+        #cv2.circle(gray,pca1_loc,radius=3,color=(255))
+        #cv2.circle(gray,pca2_loc,radius=3,color=(255))
 
         slice_dir = np.argmin(pca_val)  # slice by the minimum variance
         # Create the masks to separate two paths
@@ -283,16 +282,16 @@ if __name__ == '__main__':
         #                color=(0,0,0),thickness=2,tipLength=0.5)
 
 
-        rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the bot is vertical
-        rotated_top_up = ndimage.rotate(frame,top_angle*180/np.pi) # rotate the image so the top is vertical
-        rotated_path = ndimage.rotate(frame,float(path_angle)*180/np.pi)   
-        cv2.imshow('rotated', rotated_path)
-        cv2.waitKey()
+        #rotated_bot_up = ndimage.rotate(frame,bot_angle*180/np.pi) # rotate the image so the bot is vertical
+        #rotated_top_up = ndimage.rotate(frame,top_angle*180/np.pi) # rotate the image so the top is vertical
+        #rotated_path = ndimage.rotate(frame,float(path_angle)*180/np.pi)   
+        #cv2.imshow('rotated', rotated_path)
+        cv2.waitKey(1)
 
 
-        #    [path_color, background_color, theta, size, location[x,y]]
-        current_path_properties = [path_color, background_color, path_angle, path_size/img_size, bot_hori_cent, bot_vert_cent]
-        print(current_path_properties)
+        #    [path_color, background_color, theta, size, bot_location, top_location]
+        current_path_properties = [path_color, background_color, path_angle, path_size/img_size, bot_hori_cent, bot_vert_cent, top_hori_cent, top_vert_cent]
+        #print(current_path_properties)
         path_update = path_object.compareAndUpdate(current_path_properties)
         print(list(zip(path_object.PROPERTY_TAGS, path_object.properties)))
 
@@ -304,25 +303,30 @@ if __name__ == '__main__':
         else:
             cv2.putText(frame, "found path", (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,0))
         
-        if (path_object.properties[path_object.PROPERTY_TAGS.index("x")] < width/2):
+        # track bottom x
+        if (path_object.properties[path_object.PROPERTY_TAGS.index("x_bot")] < width/2):
             print("move left")
-            cv2.putText(frame, "move left (x pos): {loc}".format(loc = path_object.properties[path_object.PROPERTY_TAGS.index("x")]),
+            cv2.putText(frame, "move left (x pos): {loc}".format(loc = path_object.properties[path_object.PROPERTY_TAGS.index("x_bot")]),
                         (0,40), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         else:
             print("move right")
-            cv2.putText(frame, "move right(x pos): {loc}".format(loc = path_object.properties[path_object.PROPERTY_TAGS.index("x")]),
+            cv2.putText(frame, "move right(x pos): {loc}".format(loc = path_object.properties[path_object.PROPERTY_TAGS.index("x_bot")]),
                         (0,40), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
 
-        if (path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")] < np.pi/2):        # might need adjustments
+        # top x - bottom x
+        turn_direction = path_object.properties[path_object.PROPERTY_TAGS.index("x_top")] - path_object.properties[path_object.PROPERTY_TAGS.index("x_bot")]
+
+        if (turn_direction > 0):
             print("rotate right")
-            cv2.putText(frame, "rotate right(theta): {theta}".format(theta = path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
+            cv2.putText(frame, "rotate right(turn mag): {theta}".format(theta = path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
                         (0,60), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         else:
             print("rotate left")
-            cv2.putText(frame, "rotate left(theta): {theta}".format(theta = path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
+            cv2.putText(frame, "rotate left(turn mag): {theta}".format(theta = path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
                         (0,60), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         
         cv2.putText(frame, "{cur_frame}".format(cur_frame = current_frame), (0,80), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         cv2.imshow('final', frame)
     cap.release()
     cv2.destroyAllWindows()
+    cv2.waitKey(1)
