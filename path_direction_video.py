@@ -105,13 +105,15 @@ class Path_Properties:
 
 SCALING_FACTOR = 0.5
 
-NOISE_PROPORTION = 0.005 # threshold % of the image as path (less means it is noise)
+NOISE_PROPORTION = 0.01 # threshold % of the image as path (less means it is noise)
 FORWARD_DEFAULT = [0,-1] # image up is forward
 
 # thresholds
-PATH_COLOR_LOW_THRES, PATH_COLOR_UP_THRES = 65, 90
-PATH_WIDTH_LOW_THRES, PATH_WIDTH_UP_THRES = 70, 600      # between means it is path
+PATH_COLOR_LOW_THRES, PATH_COLOR_UP_THRES = 60, 85
+PATH_WIDTH_LOW_THRES, PATH_WIDTH_UP_THRES = 70, 400      # between means it is path
 NUM_OF_COLORS = 4   # depends on the situation (4 or higher if there are random stuff and opposite colors of tiles)
+
+WAIT_KEY = 0 # 0 to wait key press
 ### 
 #   Functions
 ###
@@ -194,7 +196,7 @@ if __name__ == '__main__':
         height = int(frame.shape[0] * SCALING_FACTOR)
         
         frame = cv2.resize(frame, (width, height))
-        frame = cv2.medianBlur(frame,3)
+        frame = cv2.medianBlur(frame,5)
         cv2.imshow('original', frame)
         test_slice_imgs = test_prep.slice(frame)
         test_kmeans = test_slice_imgs.copy()
@@ -231,11 +233,16 @@ if __name__ == '__main__':
         img_size = sum(gray_counts)
         background_color = gray_colors[np.argsort(gray_counts)[-1]]             # most common color
         gray_counts[gray_counts < img_size * NOISE_PROPORTION] = img_size       # mark noise color (takse too little of the image)
+        out_of_thresh = 0
         for i,color in enumerate(gray_colors):                                  # mark white and black tiles
             if color < PATH_COLOR_LOW_THRES or color > PATH_COLOR_UP_THRES:
                 gray_counts[i] = img_size
+                out_of_thresh += 1
         
-        path_color = gray_colors[np.argsort(gray_counts)[0]]                    # find the least common color
+        path_color = gray_colors[np.argsort(gray_counts)[0]]    # find the least common color
+        if out_of_thresh == NUM_OF_COLORS:
+            closest_color_i = np.argmin(np.abs(gray_colors - (PATH_COLOR_LOW_THRES + PATH_COLOR_UP_THRES)/2))
+            path_color = gray_colors[closest_color_i]
         path_size = gray_counts[np.argsort(gray_counts)[0]]
         print(gray_colors, gray_counts, path_color, background_color)
         # simple threshold, use the least frequent color (which should not be the background)
@@ -308,7 +315,7 @@ if __name__ == '__main__':
         #rotated_top_up = ndimage.rotate(frame,top_angle*180/np.pi) # rotate the image so the top is vertical
         #rotated_path = ndimage.rotate(frame,float(path_angle)*180/np.pi)   
         #cv2.imshow('rotated', rotated_path)
-        cv2.waitKey(1)
+        cv2.waitKey(WAIT_KEY)
         first_pass_end_location = compute_location((path_hori_cent, path_vert_cent), path_dir_first_pass,scale= np.max(pca_val)/np.sum(pca_val)*30)
         first_pass_variance_end_location = compute_location((path_hori_cent, path_vert_cent), path_variance_first_pass, scale = np.min(pca_val)/np.sum(pca_val)*30)
         cv2.arrowedLine(frame,(path_hori_cent, path_vert_cent),first_pass_end_location,
