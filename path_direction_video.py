@@ -1,5 +1,6 @@
 
 import cv2
+from cv2 import putText
 from matplotlib import path
 import numpy as np
 from scipy import ndimage
@@ -175,10 +176,11 @@ if __name__ == '__main__':
                 '/home/xing/TesterCodes/OpenCV/PathProject/Data/auto_path.avi',
                 '/home/xing/TesterCodes/OpenCV/PathProject/Data/manual_path_edited.mp4']
     path_file_select = 10
-
+    
     test_prep = ImagePrep(slice_size = 25)
     path_object = Path_Properties()
-    
+    out_video = cv2.VideoWriter("path_output.avi",cv2.VideoWriter_fourcc('M','J','P','G'), 10, (320,240))
+
     cap = cv2.VideoCapture(path_dirs[path_file_select])
     ####
     #   Filter Image to Binary Image
@@ -307,7 +309,13 @@ if __name__ == '__main__':
         #rotated_path = ndimage.rotate(frame,float(path_angle)*180/np.pi)   
         #cv2.imshow('rotated', rotated_path)
         cv2.waitKey(1)
-
+        first_pass_end_location = compute_location((path_hori_cent, path_vert_cent), path_dir_first_pass,scale= np.max(pca_val)/np.sum(pca_val)*30)
+        first_pass_variance_end_location = compute_location((path_hori_cent, path_vert_cent), path_variance_first_pass, scale = np.min(pca_val)/np.sum(pca_val)*30)
+        cv2.arrowedLine(frame,(path_hori_cent, path_vert_cent),first_pass_end_location,
+                        color=(0,0,255),thickness=1,tipLength=0.2)
+        cv2.arrowedLine(frame,(path_hori_cent, path_vert_cent),first_pass_variance_end_location,
+                        color=(0,255,0),thickness=1,tipLength=0.2)
+        
 
         #    [path_color, background_color, theta, size, path_location, bot_location, top_location]
         current_path_properties = [path_color, background_color, path_angle, path_size/img_size, path_hori_cent, path_vert_cent, bot_hori_cent, bot_vert_cent, top_hori_cent, top_vert_cent]
@@ -317,45 +325,41 @@ if __name__ == '__main__':
 
         # information on display
         pca_variance_thres = np.min(pca_val)
-        color_diff = max(abs(gray_colors.astype(int) - int(path_color))) # largest difference between path and other colors
-        #if  color_diff > PATH_UP_THRES or color_diff < PATH_LOW_THRES:
         if pca_variance_thres < PATH_COLOR_LOW_THRES or pca_variance_thres > PATH_WIDTH_UP_THRES or path_color < PATH_COLOR_LOW_THRES or path_color > PATH_COLOR_UP_THRES:
-            cv2.putText(frame, "no path: {diff} {var}".format(diff = path_color, var = pca_variance_thres), (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,0,255))
+            cv2.putText(frame, "no path", (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,0,255))
+            cv2.putText(frame, "color: {diff}    width: {var:.2f}".format(diff = path_color, var = pca_variance_thres), (0,40), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,0,255))
         else:
-            cv2.putText(frame, "found path: {diff} {var}".format(diff = path_color, var = pca_variance_thres), (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,0))
+            cv2.putText(frame, "found path:", (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,0))
+            cv2.putText(frame, "color: {diff}    width: {var:.2f}".format(diff = path_color, var = pca_variance_thres), (0,40), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,0))
             cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),(top_hori_cent, top_vert_cent),
                         color=(255,255,255),thickness=2,tipLength=0.2)
-            first_pass_end_location = compute_location((path_hori_cent, path_vert_cent), path_dir_first_pass,scale= np.max(pca_val)/40)
-            first_pass_variance_end_location = compute_location((path_hori_cent, path_vert_cent), path_variance_first_pass, scale = np.min(pca_val)/20)
-            cv2.arrowedLine(frame,(path_hori_cent, path_vert_cent),first_pass_end_location,
-                        color=(0,0,255),thickness=2,tipLength=0.2)
-            cv2.arrowedLine(frame,(path_hori_cent, path_vert_cent),first_pass_variance_end_location,
-                        color=(0,255,0),thickness=2,tipLength=0.2)
-        
+
         # track bottom x
         if (path_object.properties[path_object.PROPERTY_TAGS.index("path_x")] < width/2):
             print("move left")
             cv2.putText(frame, "move left (x offset): {loc}".format(loc = path_object.properties[path_object.PROPERTY_TAGS.index("path_x")] - width/2),
-                        (0,40), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
+                        (0,60), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         else:
             print("move right")
             cv2.putText(frame, "move right(x offset): {loc}".format(loc = path_object.properties[path_object.PROPERTY_TAGS.index("path_x")] - width/2),
-                        (0,40), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
+                        (0,60), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
 
         # top x - bottom x
         turn_direction = path_object.properties[path_object.PROPERTY_TAGS.index("x_top")] - path_object.properties[path_object.PROPERTY_TAGS.index("x_bot")]
 
         if (turn_direction > 0):
             print("rotate right")
-            cv2.putText(frame, "rotate right(turn rad): {theta}".format(theta = path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
-                        (0,60), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
+            cv2.putText(frame, "rotate right(turn rad): {theta:.2f}".format(theta = path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
+                        (0,80), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         else:
             print("rotate left")
-            cv2.putText(frame, "rotate left(turn rad): {theta}".format(theta = -path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
-                        (0,60), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
+            cv2.putText(frame, "rotate left(turn rad): {theta:.2f}".format(theta = -path_object.properties[path_object.PROPERTY_TAGS.index("bot2top_theta")]),
+                        (0,80), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         
-        cv2.putText(frame, "{cur_frame}".format(cur_frame = current_frame), (0,80), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
+        cv2.putText(frame, "frame: {cur_frame}".format(cur_frame = current_frame), (0,100), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         cv2.imshow('final', frame)
+        out_video.write(frame)
     cap.release()
+    out_video.release()
     cv2.destroyAllWindows()
     cv2.waitKey(1)
