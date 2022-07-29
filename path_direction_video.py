@@ -1,5 +1,6 @@
 
 import cv2
+from matplotlib import path
 import numpy as np
 from scipy import ndimage
 
@@ -105,8 +106,11 @@ SCALING_FACTOR = 0.5
 
 NOISE_PROPORTION = 0.005 # threshold % of the image as path (less means it is noise)
 FORWARD_DEFAULT = [0,-1] # image up is forward
-BACKGROUND_UP_THRES = 70    # difference between background color and path
-BACKGROUND_LOW_THRES = 30    
+
+# thresholds
+PATH_COLOR_LOW_THRES, PATH_COLOR_UP_THRES = 65, 90
+PATH_WIDTH_LOW_THRES, PATH_WIDTH_UP_THRES = 70, 600      # between means it is path
+NUM_OF_COLORS = 4   # depends on the situation (4 or higher if there are random stuff and opposite colors of tiles)
 ### 
 #   Functions
 ###
@@ -167,10 +171,12 @@ if __name__ == '__main__':
                 '/home/xing/TesterCodes/OpenCV/PathProject/Data/path_rotate.mp4',
                 '/home/xing/TesterCodes/OpenCV/PathProject/Data/maryland-pool-img_SFmnGKCf.mp4',
                 '/home/xing/TesterCodes/OpenCV/PathProject/Data/path_left_up_down.mp4',
-                '/home/xing/TesterCodes/OpenCV/PathProject/Data/maryland-pool-img-4_bPA7wbk1.mp4']
-    path_file_select = 8
+                '/home/xing/TesterCodes/OpenCV/PathProject/Data/maryland-pool-img-4_bPA7wbk1.mp4',
+                '/home/xing/TesterCodes/OpenCV/PathProject/Data/auto_path.avi',
+                '/home/xing/TesterCodes/OpenCV/PathProject/Data/manual_path_edited.mp4']
+    path_file_select = 10
 
-    test_prep = ImagePrep(slice_size = 10)
+    test_prep = ImagePrep(slice_size = 25)
     path_object = Path_Properties()
     
     cap = cv2.VideoCapture(path_dirs[path_file_select])
@@ -181,23 +187,25 @@ if __name__ == '__main__':
     print(cap.isOpened())
     while cap.isOpened():
         ret, frame = cap.read()
-
+        
         width = int(frame.shape[1] * SCALING_FACTOR)
         height = int(frame.shape[0] * SCALING_FACTOR)
+        
         frame = cv2.resize(frame, (width, height))
+        frame = cv2.medianBlur(frame,3)
         cv2.imshow('original', frame)
         test_slice_imgs = test_prep.slice(frame)
         test_kmeans = test_slice_imgs.copy()
         comb_row = [i for i in range(len(test_slice_imgs))]
         for i,row in enumerate(test_slice_imgs):
             for j,block in enumerate(row):
-                test_kmeans[i][j], _ = test_prep.reduce_image_color(block)
+                test_kmeans[i][j], _ = test_prep.reduce_image_color(block, 2)
             comb_row[i] = (test_prep.combineRow(test_kmeans[i]))
         combined_filter = test_prep.combineCol(comb_row)
 
         #combined_filter[:,:,1:3] = 0    # only blue channel is relevant (clear GR in BGR)
 
-        filter_final, colors = test_prep.reduce_image_color(combined_filter,3)  # reduce colors (background (black & white tiles) and path)
+        filter_final, colors = test_prep.reduce_image_color(combined_filter,NUM_OF_COLORS)  # reduce colors (background (black & white tiles) and path)
 
 
 
@@ -207,7 +215,7 @@ if __name__ == '__main__':
         #   Find Path Directions
         ####
         gray = cv2.cvtColor(filter_final, cv2.COLOR_BGR2GRAY) 
-        
+
         cv2.imshow('g',gray)
         # adaptively find the path color
         gray_colors, gray_counts = np.unique(gray.flatten(),return_counts=True)                 # find the colors and counts of each color
@@ -217,14 +225,12 @@ if __name__ == '__main__':
             print("no path in image")
             continue
         current_frame += 1
-        if abs(gray_colors[0].astype(int) - gray_colors[1].astype(int)) < 3:
-            print("no path in image")
 
         img_size = sum(gray_counts)
         background_color = gray_colors[np.argsort(gray_counts)[-1]]             # most common color
         gray_counts[gray_counts < img_size * NOISE_PROPORTION] = img_size       # mark noise color (takse too little of the image)
         for i,color in enumerate(gray_colors):                                  # mark white and black tiles
-            if color < 60 or color > 200:
+            if color < PATH_COLOR_LOW_THRES or color > PATH_COLOR_UP_THRES:
                 gray_counts[i] = img_size
         
         path_color = gray_colors[np.argsort(gray_counts)[0]]                    # find the least common color
@@ -232,7 +238,8 @@ if __name__ == '__main__':
         print(gray_colors, gray_counts, path_color, background_color)
         # simple threshold, use the least frequent color (which should not be the background)
         thres = np.uint8(np.where(gray == path_color, 255, 0)) # produce binary image for the path color found
-        thres = cv2.medianBlur(thres,11)                       # remove the edges
+        #thres = cv2.erode(thres,(5,5), iterations=2)
+        #thres = cv2.medianBlur(thres,3)                      # remove the edges
 
         #cv2.imshow('thres',thres)
 
@@ -248,7 +255,12 @@ if __name__ == '__main__':
         #cv2.circle(gray,(hori_cent, vert_cent),radius=3,color=(0))
         #cv2.circle(gray,pca1_loc,radius=3,color=(255))
         #cv2.circle(gray,pca2_loc,radius=3,color=(255))
-
+        path_dir_first_pass = pca_vector_1[:,np.argmax(pca_val)]
+        path_variance_first_pass = pca_vector_1[:,np.argmin(pca_val)]
+        if path_dir_first_pass[1] > 0:
+            path_dir_first_pass = -path_dir_first_pass
+        print(path_dir_first_pass)
+        print(compute_angle(FORWARD_DEFAULT, path_dir_first_pass))
         slice_dir = np.argmin(pca_val)  # slice by the minimum variance
         # Create the masks to separate two paths
         mask_one = np.ones(input_shape, dtype="uint8")                                   # generate mask
@@ -304,13 +316,21 @@ if __name__ == '__main__':
         print(list(zip(path_object.PROPERTY_TAGS, path_object.properties)))
 
         # information on display
-        cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),(top_hori_cent, top_vert_cent),
-                        color=(255,255,255),thickness=2,tipLength=0.2)
+        pca_variance_thres = np.min(pca_val)
         color_diff = max(abs(gray_colors.astype(int) - int(path_color))) # largest difference between path and other colors
-        if  color_diff > BACKGROUND_UP_THRES or color_diff < BACKGROUND_LOW_THRES:
-            cv2.putText(frame, "no path: {diff}".format(diff = color_diff), (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,0,255))
+        #if  color_diff > PATH_UP_THRES or color_diff < PATH_LOW_THRES:
+        if pca_variance_thres < PATH_COLOR_LOW_THRES or pca_variance_thres > PATH_WIDTH_UP_THRES or path_color < PATH_COLOR_LOW_THRES or path_color > PATH_COLOR_UP_THRES:
+            cv2.putText(frame, "no path: {diff} {var}".format(diff = path_color, var = pca_variance_thres), (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,0,255))
         else:
-            cv2.putText(frame, "found path: {diff}".format(diff = color_diff), (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,0))
+            cv2.putText(frame, "found path: {diff} {var}".format(diff = path_color, var = pca_variance_thres), (0,20), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,0))
+            cv2.arrowedLine(frame,(bot_hori_cent, bot_vert_cent),(top_hori_cent, top_vert_cent),
+                        color=(255,255,255),thickness=2,tipLength=0.2)
+            first_pass_end_location = compute_location((path_hori_cent, path_vert_cent), path_dir_first_pass,scale= np.max(pca_val)/40)
+            first_pass_variance_end_location = compute_location((path_hori_cent, path_vert_cent), path_variance_first_pass, scale = np.min(pca_val)/20)
+            cv2.arrowedLine(frame,(path_hori_cent, path_vert_cent),first_pass_end_location,
+                        color=(0,0,255),thickness=2,tipLength=0.2)
+            cv2.arrowedLine(frame,(path_hori_cent, path_vert_cent),first_pass_variance_end_location,
+                        color=(0,255,0),thickness=2,tipLength=0.2)
         
         # track bottom x
         if (path_object.properties[path_object.PROPERTY_TAGS.index("path_x")] < width/2):
