@@ -197,7 +197,7 @@ if __name__ == '__main__':
         
         frame = cv2.resize(frame, (width, height))
         frame = cv2.medianBlur(frame,5)
-        cv2.imshow('original', frame)
+
         test_slice_imgs = test_prep.slice(frame)
         test_kmeans = test_slice_imgs.copy()
         comb_row = [i for i in range(len(test_slice_imgs))]
@@ -212,15 +212,11 @@ if __name__ == '__main__':
         filter_final, colors = test_prep.reduce_image_color(combined_filter,NUM_OF_COLORS)  # reduce colors (background (black & white tiles) and path)
 
 
-
-        cv2.imshow('testslice',filter_final)
-
         ####
         #   Find Path Directions
         ####
         gray = cv2.cvtColor(filter_final, cv2.COLOR_BGR2GRAY) 
 
-        cv2.imshow('g',gray)
         # adaptively find the path color
         gray_colors, gray_counts = np.unique(gray.flatten(),return_counts=True)                 # find the colors and counts of each color
         print(gray_colors,gray_counts)
@@ -279,9 +275,11 @@ if __name__ == '__main__':
         # generate the two path segments
         bottom_path = cv2.bitwise_and(thres,thres,mask=mask_one)
         top_path = cv2.bitwise_and(thres,thres,mask=mask_two)
-
-        cv2.imshow('mask1_path',bottom_path)
-        cv2.imshow('mask2_path',top_path)
+        overall_path = cv2.bitwise_or(bottom_path,top_path)
+        display_image_left = test_prep.combineCol([filter_final,cv2.cvtColor(gray,cv2.COLOR_GRAY2BGR)])
+        display_image_middle = test_prep.combineCol([cv2.cvtColor(top_path,cv2.COLOR_GRAY2BGR), cv2.cvtColor(bottom_path,cv2.COLOR_GRAY2BGR)])
+        
+        #cv2.imshow('mask2_path',top_path)
 
         # Compute Principle Components for both path segments (center point(mean), direction vector(eigvec), variance vector(eigval))
         path_center1, path_direction1, pca_val1 = Path_PCA(bottom_path)
@@ -364,7 +362,9 @@ if __name__ == '__main__':
                         (0,80), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
         
         cv2.putText(frame, "frame: {cur_frame}".format(cur_frame = current_frame), (0,100), cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(255,255,255))
-        cv2.imshow('final', frame)
+        display_image_right = test_prep.combineCol([cv2.cvtColor(overall_path, cv2.COLOR_GRAY2BGR), frame])
+        display_image_overall = test_prep.combineRow([display_image_left, display_image_middle, display_image_right])
+        cv2.imshow('final', display_image_overall)
         out_video.write(frame)
     cap.release()
     out_video.release()
