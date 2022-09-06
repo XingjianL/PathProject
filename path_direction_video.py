@@ -1,9 +1,6 @@
 
 import cv2
-from cv2 import putText
-from matplotlib import path
 import numpy as np
-from scipy import ndimage
 
 from time import time
 total_time_func = 0
